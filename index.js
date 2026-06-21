@@ -2,7 +2,7 @@ const express = require("express");
 const app = express();
 const dotenv = require("dotenv");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = 5000;
 
 // Middleware & Configuration
@@ -29,17 +29,50 @@ async function run() {
 
     const database = client.db("lessons_up");
     const lessonsCollection = database.collection("lessons");
+    const likesCollection = database.collection("likes");
 
     app.post("/lessons", async (req, res) => {
       try {
         const lessons = req.body;
-        console.log(lessons, "lessons data received");
+       
 
         const result = await lessonsCollection.insertOne(lessons);
         res.status(201).json(result);
       } catch (error) {
         console.error("Error inserting lesson:", error);
         res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+    app.post("/likes",async(req, res)=>{
+      try{
+        const likes = req.body
+        const result = await likesCollection.insertOne(likes)
+        res.status(201).json(result);
+
+      } catch (error) {
+        console.error("Error inserting lesson:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+      
+
+    })
+    app.get("/lessons/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const query = { _id: new ObjectId(id) };
+
+        const result = await lessonsCollection.findOne(query);
+
+        if (!result) {
+          return res.status(404).send({ message: "Lesson not found" });
+        }
+
+        res.send(result);
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Internal Server Error", error: error.message });
       }
     });
     app.get("/lessons", async (req, res) => {
@@ -53,13 +86,11 @@ async function run() {
     });
     app.get("/lessons/:userId", async (req, res) => {
       try {
-        
         const userId = req.params.userId;
-        console.log(userId)
-         
+        console.log(userId);
+
         const query = { userId: userId };
 
-        
         const count = await lessonsCollection.find(query).toArray();
 
         res.send({ totalLessons: count });
@@ -77,7 +108,6 @@ async function run() {
   }
 }
 
-// run ফাংশন কল করা
 run().catch(console.dir);
 
 app.listen(port, () => {
