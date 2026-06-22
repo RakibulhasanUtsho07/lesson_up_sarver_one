@@ -133,7 +133,18 @@ async function run() {
     console.error("Error in counting lessons:", error);
     res.status(500).send({ message: "Error counting lessons", error: error.message });
   }
-}); 
+});   app.get("/savePosts/count/:userId", async (req, res) => {
+      try {
+        const userId = req.params.userId;
+        const query = { userId: userId };
+
+        const count = await savesCollection.countDocuments(query)
+        res.send({totalSavedLessons:count});
+      } catch (error) {
+        console.error("Backend error in /savePosts/:userId:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
