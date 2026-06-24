@@ -3,6 +3,7 @@ const app = express();
 const dotenv = require("dotenv");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { object } = require("better-auth");
 const port = 5000;
 
 app.use(cors({
@@ -70,6 +71,38 @@ async function run() {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
+   app.patch("/user/update-plan/:userId", async (req, res) => {
+  try {
+    // ⚡ ভুল সংশোধন: req.body নয়, আইডি আসবে req.params থেকে
+    const userId = req.params.userId;
+
+    if (!userId || userId === 'undefined') {
+      return res.status(400).json({ message: "Valid User ID is required" });
+    }
+
+    const query = {
+      _id: new ObjectId(userId)
+    };
+
+    const data = {
+      $set: {
+        plan: 'Premium',
+        updatedAt: new Date() // বানান ঠিক করা হয়েছে: updateAt -> updatedAt
+      }
+    };
+
+    const result = await userCollection.updateOne(query, data);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error("Backend Error:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
     // 📊 [GET] Total Users Count
     app.get("/lesson-up/user/count", async (req, res) => {
