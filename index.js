@@ -103,6 +103,43 @@ async function run() {
     res.status(500).send({ message: "Internal Server Error" });
   }
 });
+app.patch("/lesson/feature/:lessonId", async (req, res) => {
+  try {
+    const lessonId = req.params.lessonId;
+
+    if (!lessonId || lessonId === 'undefined') {
+      return res.status(400).json({ success: false, message: "Valid Lesson ID is required" });
+    }
+
+    const query = { _id: new ObjectId(lessonId) };
+    const currentLesson = await lessonsCollection.findOne(query);
+    
+    if (!currentLesson) {
+      return res.status(404).json({ success: false, message: "Lesson not found" });
+    }
+
+    const nextStatus = currentLesson.isFeatured === true ? false : true;
+
+    const result = await lessonsCollection.updateOne(query, {
+      $set: { isFeatured: nextStatus, updatedAt: new Date() }
+    });
+
+    if (result.modifiedCount === 0) {
+      return res.status(500).json({ success: false, message: "Update failed" });
+    }
+
+    // ✅ Frontend expects: success, message, isFeatured
+    res.json({
+      success: true,
+      message: nextStatus ? "Lesson marked as featured" : "Lesson removed from featured",
+      isFeatured: nextStatus,
+    });
+
+  } catch (error) {
+    console.error("Backend Error:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
 
     // 📊 [GET] Total Users Count
     app.get("/lesson-up/user/count", async (req, res) => {
