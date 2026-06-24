@@ -34,8 +34,21 @@ async function run() {
     const lessonsCollection = database.collection("lessons");
     const likesCollection = database.collection("likes");
     const savesCollection = database.collection("savePosts");
-    const userCollection = database.collection("user")
+    const userCollection = database.collection("user");
 
+    // 👥 [GET] Fetch All Users (🔐 Secure & Clean)
+    app.get("/users", async (req, res) => {
+      try {
+        // পাসওয়ার্ড এবং ইন্টারনাল মঙ্গোডিবি ভার্সন বাদ দিয়ে ক্লিন ডাটা রিট্রিভ করা হচ্ছে
+        const result = await userCollection.find().project({ password: 0, __v: 0 }).toArray();
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error in GET /users:", error);
+        res.status(500).send({ message: "Server error occurred" });
+      }
+    });
+
+    // 📝 [POST] Create a Lesson
     app.post("/lessons", async (req, res) => {
       try {
         const lessons = req.body;
@@ -46,27 +59,30 @@ async function run() {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
-    app.get("/lessons/count", async(req, res)=>{
-      try{
-        const lessons = req.body
-        const count = await lessonsCollection.countDocuments(lessons)
-        res.status(201).json({totalLessons:count});
-      }catch(error){
-         console.error("Error inserting lesson:", error);
-        res.status(500).send({ message: "Internal Server Error" });
-      }
-    })
-    app.get("/lesson-up/user/count", async(req, res)=>{
-      try{
-        const user = req.body
-        const count= await userCollection.countDocuments(user)
-        res.status(201).json({totalUser:count});
-      }catch(error){
-          console.error("Error inserting lesson:", error);
-        res.status(500).send({ message: "Internal Server Error" });
-      }
-    })
 
+    // 📊 [GET] Total Lessons Count
+    app.get("/lessons/count", async (req, res) => {
+      try {
+        const count = await lessonsCollection.countDocuments({});
+        res.status(200).json({ totalLessons: count });
+      } catch (error) {
+        console.error("Error in /lessons/count:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // 📊 [GET] Total Users Count
+    app.get("/lesson-up/user/count", async (req, res) => {
+      try {
+        const count = await userCollection.countDocuments({});
+        res.status(200).json({ totalUser: count });
+      } catch (error) {
+        console.error("Error in /lesson-up/user/count:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // ❤️ [POST] Insert Like
     app.post("/likes", async (req, res) => {
       try {
         const likes = req.body;
@@ -78,6 +94,7 @@ async function run() {
       }
     });
 
+    // 💾 [POST] Save Post
     app.post("/savePosts", async (req, res) => {
       try {
         const saves = req.body;
@@ -89,6 +106,7 @@ async function run() {
       }
     });
 
+    // 📂 [GET] Saved Posts by User ID
     app.get("/savePosts/:userId", async (req, res) => {
       try {
         const userId = req.params.userId;
@@ -101,30 +119,23 @@ async function run() {
       }
     });
 
-    // 🌟 FIXED: Changed pattern to explicit "/lessons/user/:userId" to avoid route collisions
+    // 🎯 [GET] Lessons by User ID
     app.get("/lessons/user/:userId", async (req, res) => {
       try {
         const userId = req.params.userId;
-        console.log("Incoming request for User ID:", userId);
-
         if (!userId || userId === "undefined") {
-          return res
-            .status(400)
-            .send({ message: "Invalid or missing User ID parameter" });
+          return res.status(400).send({ message: "Invalid or missing User ID parameter" });
         }
-
         const query = { userId: userId };
         const result = await lessonsCollection.find(query).toArray();
-
         res.status(200).send(result);
       } catch (error) {
-        console.error("Backend Error:", error);
-        res
-          .status(500)
-          .send({ message: "Error retrieving lessons", error: error.message });
+        console.error("Backend Error in /lessons/user/:userId:", error);
+        res.status(500).send({ message: "Error retrieving lessons", error: error.message });
       }
     });
 
+    // 📈 [GET] Lessons Count by User ID
     app.get("/lessons/count/:userId", async (req, res) => {
       try {
         const userId = req.params.userId;
@@ -133,12 +144,11 @@ async function run() {
         res.send({ totalLessons: count });
       } catch (error) {
         console.error("Error in counting lessons:", error);
-        res
-          .status(500)
-          .send({ message: "Error counting lessons", error: error.message });
+        res.status(500).send({ message: "Error counting lessons", error: error.message });
       }
     });
 
+    // 📉 [GET] Saved Posts Count by User ID
     app.get("/savePosts/count/:userId", async (req, res) => {
       try {
         const userId = req.params.userId;
@@ -146,87 +156,60 @@ async function run() {
         const count = await savesCollection.countDocuments(query);
         res.send({ totalSavedLessons: count });
       } catch (error) {
-        console.error("Backend error in /savePosts/:userId:", error);
+        console.error("Backend error in /savePosts/count/:userId:", error);
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
 
-    // 🌟 FIXED: Kept specific lesson lookup route below unique sub-paths
+    // 🔍 [GET] Single Lesson by Object ID
     app.get("/lessons/:id", async (req, res) => {
       try {
         const { id } = req.params;
-        
         const query = { _id: new ObjectId(id) };
         const result = await lessonsCollection.findOne(query);
-
         if (!result) {
           return res.status(404).send({ message: "Lesson not found" });
         }
-
         res.send(result);
       } catch (error) {
-        res
-          .status(500)
-          .send({ message: "Internal Server Error", error: error.message });
+        res.status(500).send({ message: "Internal Server Error", error: error.message });
       }
     });
    
-app.patch("/lessons/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updatedData = req.body;
-
-   
-    if(updatedData._id) delete updatedData._id;
-
-    const query = { _id: new ObjectId(id) };
-    const updateDoc = {
-      $set: updatedData,
-    };
-
-    const result = await lessonsCollection.updateOne(query, updateDoc);
-    res.status(200).send(result);
-  } catch (error) {
-    console.error("Error updating lesson:", error);
-    res.status(500).send({ message: "Internal Server Error" });
-  }
-});
-     app.get("/lesson-update/:id", async (req, res) => {
+    // ✏️ [PATCH] Update Single Lesson
+    app.patch("/lessons/:id", async (req, res) => {
       try {
         const { id } = req.params;
-        console.log(id, "updateLesson")
+        const updatedData = req.body;
+        if (updatedData._id) delete updatedData._id;
+
+        const query = { _id: new ObjectId(id) };
+        const updateDoc = { $set: updatedData };
+
+        const result = await lessonsCollection.updateOne(query, updateDoc);
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error updating lesson:", error);
+        res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+
+    // 🔄 [GET] Specific Lesson Target for Update
+    app.get("/lesson-update/:id", async (req, res) => {
+      try {
+        const { id } = req.params;
         const query = { _id: new ObjectId(id) };
         const result = await lessonsCollection.findOne(query);
-
         if (!result) {
           return res.status(404).send({ message: "Lesson not found" });
         }
-
         res.send(result);
       } catch (error) {
-        res
-          .status(500)
-          .send({ message: "Internal Server Error", error: error.message });
+        res.status(500).send({ message: "Internal Server Error", error: error.message });
       }
     });
-    // app.patch("/lessons/update/:id", async (req, res) => {
-    //   try {
-    //     const { id } = req.params;
-    //     const updatedData = req.body;
 
-    //     const query = { _id: new ObjectId(id) };
-    //     const updateDoc = {
-    //       $set: updatedData,
-    //     };
-
-    //     const result = await lessonsCollection.updateOne(query, updateDoc);
-    //     res.status(200).send(result);
-    //   } catch (error) {
-    //     console.error("Error updating lesson:", error);
-    //     res.status(500).send({ message: "Internal Server Error" });
-    //   }
-    // });
-
+    // 📄 [GET] All Lessons
     app.get("/lessons", async (req, res) => {
       try {
         const result = await lessonsCollection.find().toArray();
@@ -237,10 +220,9 @@ app.patch("/lessons/:id", async (req, res) => {
       }
     });
 
+    // MongoDB Ping
     await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!",
-    );
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } catch (error) {
     console.error("Database connection error:", error);
   }
