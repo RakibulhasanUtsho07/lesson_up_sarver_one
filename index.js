@@ -289,6 +289,30 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
         res.status(500).send({ message: "Server error occurred" });
       }
     });
+   app.delete("/lessons/delete/:lessonId", async (req, res) => {
+  try {
+    const lessonId = req.params.lessonId;
+
+    if (!lessonId || lessonId === 'undefined') {
+      return res.status(400).json({ success: false, message: "Valid Lesson ID is required" });
+    }
+
+   
+    const query = { _id: new ObjectId(lessonId) };
+
+    
+    const result = await lessonsCollection.deleteOne(query);
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: "Lesson not found" });
+    }
+
+    res.json({ success: true, message: "Lesson deleted successfully", result });
+  } catch (error) {
+    console.error("Backend Error:", error);
+    res.status(500).json({ success: false, message: "Server error occurred" });
+  }
+});
 
     // MongoDB Ping
     await client.db("admin").command({ ping: 1 });
