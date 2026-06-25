@@ -6,10 +6,12 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { object } = require("better-auth");
 const port = 5000;
 
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    credentials: true,
+  }),
+);
 
 app.use(express.json());
 dotenv.config();
@@ -36,12 +38,16 @@ async function run() {
     const likesCollection = database.collection("likes");
     const savesCollection = database.collection("savePosts");
     const userCollection = database.collection("user");
+    const reportsCollection = database.collection("reports");
 
     // 👥 [GET] Fetch All Users (🔐 Secure & Clean)
     app.get("/users", async (req, res) => {
       try {
         // পাসওয়ার্ড এবং ইন্টারনাল মঙ্গোডিবি ভার্সন বাদ দিয়ে ক্লিন ডাটা রিট্রিভ করা হচ্ছে
-        const result = await userCollection.find().project({ password: 0, __v: 0 }).toArray();
+        const result = await userCollection
+          .find()
+          .project({ password: 0, __v: 0 })
+          .toArray();
         res.status(200).send(result);
       } catch (error) {
         console.error("Error in GET /users:", error);
@@ -71,75 +77,84 @@ async function run() {
         res.status(500).send({ message: "Internal Server Error" });
       }
     });
-   app.patch("/user/update-plan/:userId", async (req, res) => {
-  try {
-    // ⚡ ভুল সংশোধন: req.body নয়, আইডি আসবে req.params থেকে
-    const userId = req.params.userId;
+    app.patch("/user/update-plan/:userId", async (req, res) => {
+      try {
+        // ⚡ ভুল সংশোধন: req.body নয়, আইডি আসবে req.params থেকে
+        const userId = req.params.userId;
 
-    if (!userId || userId === 'undefined') {
-      return res.status(400).json({ message: "Valid User ID is required" });
-    }
+        if (!userId || userId === "undefined") {
+          return res.status(400).json({ message: "Valid User ID is required" });
+        }
 
-    const query = {
-      _id: new ObjectId(userId)
-    };
+        const query = {
+          _id: new ObjectId(userId),
+        };
 
-    const data = {
-      $set: {
-        plan: 'Premium',
-        updatedAt: new Date() // বানান ঠিক করা হয়েছে: updateAt -> updatedAt
+        const data = {
+          $set: {
+            plan: "Premium",
+            updatedAt: new Date(), // বানান ঠিক করা হয়েছে: updateAt -> updatedAt
+          },
+        };
+
+        const result = await userCollection.updateOne(query, data);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        res.json({ success: true, result });
+      } catch (error) {
+        console.error("Backend Error:", error);
+        res.status(500).send({ message: "Internal Server Error" });
       }
-    };
-
-    const result = await userCollection.updateOne(query, data);
-    
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    res.json({ success: true, result });
-  } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).send({ message: "Internal Server Error" });
-  }
-});
-app.patch("/lesson/feature/:lessonId", async (req, res) => {
-  try {
-    const lessonId = req.params.lessonId;
-
-    if (!lessonId || lessonId === 'undefined') {
-      return res.status(400).json({ success: false, message: "Valid Lesson ID is required" });
-    }
-
-    const query = { _id: new ObjectId(lessonId) };
-    const currentLesson = await lessonsCollection.findOne(query);
-    
-    if (!currentLesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
-    }
-
-    const nextStatus = currentLesson.isFeatured === true ? false : true;
-
-    const result = await lessonsCollection.updateOne(query, {
-      $set: { isFeatured: nextStatus, updatedAt: new Date() }
     });
+    app.patch("/lesson/feature/:lessonId", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
 
-    if (result.modifiedCount === 0) {
-      return res.status(500).json({ success: false, message: "Update failed" });
-    }
+        if (!lessonId || lessonId === "undefined") {
+          return res
+            .status(400)
+            .json({ success: false, message: "Valid Lesson ID is required" });
+        }
 
-    // ✅ Frontend expects: success, message, isFeatured
-    res.json({
-      success: true,
-      message: nextStatus ? "Lesson marked as featured" : "Lesson removed from featured",
-      isFeatured: nextStatus,
+        const query = { _id: new ObjectId(lessonId) };
+        const currentLesson = await lessonsCollection.findOne(query);
+
+        if (!currentLesson) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Lesson not found" });
+        }
+
+        const nextStatus = currentLesson.isFeatured === true ? false : true;
+
+        const result = await lessonsCollection.updateOne(query, {
+          $set: { isFeatured: nextStatus, updatedAt: new Date() },
+        });
+
+        if (result.modifiedCount === 0) {
+          return res
+            .status(500)
+            .json({ success: false, message: "Update failed" });
+        }
+
+        // ✅ Frontend expects: success, message, isFeatured
+        res.json({
+          success: true,
+          message: nextStatus
+            ? "Lesson marked as featured"
+            : "Lesson removed from featured",
+          isFeatured: nextStatus,
+        });
+      } catch (error) {
+        console.error("Backend Error:", error);
+        res
+          .status(500)
+          .json({ success: false, message: "Internal Server Error" });
+      }
     });
-
-  } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).json({ success: false, message: "Internal Server Error" });
-  }
-});
 
     // 📊 [GET] Total Users Count
     app.get("/lesson-up/user/count", async (req, res) => {
@@ -194,14 +209,18 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
       try {
         const userId = req.params.userId;
         if (!userId || userId === "undefined") {
-          return res.status(400).send({ message: "Invalid or missing User ID parameter" });
+          return res
+            .status(400)
+            .send({ message: "Invalid or missing User ID parameter" });
         }
         const query = { userId: userId };
         const result = await lessonsCollection.find(query).toArray();
         res.status(200).send(result);
       } catch (error) {
         console.error("Backend Error in /lessons/user/:userId:", error);
-        res.status(500).send({ message: "Error retrieving lessons", error: error.message });
+        res
+          .status(500)
+          .send({ message: "Error retrieving lessons", error: error.message });
       }
     });
 
@@ -214,7 +233,9 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
         res.send({ totalLessons: count });
       } catch (error) {
         console.error("Error in counting lessons:", error);
-        res.status(500).send({ message: "Error counting lessons", error: error.message });
+        res
+          .status(500)
+          .send({ message: "Error counting lessons", error: error.message });
       }
     });
 
@@ -242,10 +263,12 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
         }
         res.send(result);
       } catch (error) {
-        res.status(500).send({ message: "Internal Server Error", error: error.message });
+        res
+          .status(500)
+          .send({ message: "Internal Server Error", error: error.message });
       }
     });
-   
+
     // ✏️ [PATCH] Update Single Lesson
     app.patch("/lessons/:id", async (req, res) => {
       try {
@@ -275,7 +298,9 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
         }
         res.send(result);
       } catch (error) {
-        res.status(500).send({ message: "Internal Server Error", error: error.message });
+        res
+          .status(500)
+          .send({ message: "Internal Server Error", error: error.message });
       }
     });
 
@@ -289,34 +314,86 @@ app.patch("/lesson/feature/:lessonId", async (req, res) => {
         res.status(500).send({ message: "Server error occurred" });
       }
     });
-   app.delete("/lessons/delete/:lessonId", async (req, res) => {
-  try {
-    const lessonId = req.params.lessonId;
+    app.post("/lessons/report", async (req, res) => {
+      try {
+        const reportedData = req.body;
 
-    if (!lessonId || lessonId === 'undefined') {
-      return res.status(400).json({ success: false, message: "Valid Lesson ID is required" });
-    }
+        console.log("Received report data:", reportedData); // ← add this
+        console.log("reportsCollection:", reportsCollection); // ← add this
 
-   
-    const query = { _id: new ObjectId(lessonId) };
+        if (!reportedData.lessonId) {
+          return res
+            .status(400)
+            .json({ success: false, message: "Lesson ID is required" });
+        }
 
-    
-    const result = await lessonsCollection.deleteOne(query);
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
-    }
+        const result = await reportsCollection.insertOne(reportedData);
 
-    res.json({ success: true, message: "Lesson deleted successfully", result });
-  } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).json({ success: false, message: "Server error occurred" });
-  }
-});
+        if (result.acknowledged) {
+          return res.status(201).json({
+            success: true,
+            message: "Report submitted successfully",
+            insertedId: result.insertedId,
+          });
+        } else {
+          return res
+            .status(500)
+            .json({ success: false, message: "Failed to insert report" });
+        }
+      } catch (error) {
+        console.error("FULL ERROR:", error); // ← change this to log full error
+        res.status(500).json({ success: false, message: error.message }); // ← send actual error message
+      }
+    });
+    app.get("/lessons/report/get", async(req, res)=>{
+      try{
+        const reports = req.body
+        const result = await reportsCollection.find(reports).toArray()
+        res.send(result)
+      }catch(error){
+         console.error("FULL ERROR:", error); // ← change this to log full error
+        res.status(500).json({ success: false, message: error.message });
+      }
+    })
+
+    app.delete("/lessons/delete/:lessonId", async (req, res) => {
+      try {
+        const lessonId = req.params.lessonId;
+
+        if (!lessonId || lessonId === "undefined") {
+          return res
+            .status(400)
+            .json({ success: false, message: "Valid Lesson ID is required" });
+        }
+
+        const query = { _id: new ObjectId(lessonId) };
+
+        const result = await lessonsCollection.deleteOne(query);
+
+        if (result.deletedCount === 0) {
+          return res
+            .status(404)
+            .json({ success: false, message: "Lesson not found" });
+        }
+
+        res.json({
+          success: true,
+          message: "Lesson deleted successfully",
+          result,
+        });
+      } catch (error) {
+        console.error("Backend Error:", error);
+        res
+          .status(500)
+          .json({ success: false, message: "Server error occurred" });
+      }
+    });
 
     // MongoDB Ping
     await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    console.log(
+      "Pinged your deployment. You successfully connected to MongoDB!",
+    );
   } catch (error) {
     console.error("Database connection error:", error);
   }
