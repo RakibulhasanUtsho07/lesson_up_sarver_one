@@ -112,12 +112,10 @@ async function run() {
           lessonId === "undefined" ||
           !ObjectId.isValid(lessonId)
         ) {
-          return res
-            .status(400)
-            .json({
-              success: false,
-              message: "Valid 24-character hex MongoDB Lesson ID is required",
-            });
+          return res.status(400).json({
+            success: false,
+            message: "Valid 24-character hex MongoDB Lesson ID is required",
+          });
         }
 
         const query = { _id: new ObjectId(lessonId) };
@@ -351,8 +349,6 @@ async function run() {
           .send({ message: "Internal Server Error", error: error.message });
       }
     });
-   
-  
 
     // ✏️ [PATCH] Update Single Lesson
     app.patch("/lessons/:id", async (req, res) => {
@@ -444,7 +440,7 @@ async function run() {
     app.delete("/lessons/delete/report/:reportedId", async (req, res) => {
       try {
         const reportedId = req.params.reportedId;
-        console.log(reportedId)
+        console.log(reportedId);
 
         // ⚡ ফিক্স ৩: ব্যাকএন্ড সিনট্যাক্স ঠিক করা হলো ও আইডি চেক স্ট্রং করা হলো
         if (
@@ -481,6 +477,17 @@ async function run() {
         });
       }
     });
+   app.get("/lessons/reports/count", async (req, res) => {
+  try {
+    const result = await reportsCollection.countDocuments();
+    // ⚡ ফিক্স: রেসপন্সটিকে একটি অবজেক্ট আকারে পাঠানো হলো
+    res.json({ success: true, count: result });
+  } catch (error) {
+    res
+      .status(500)
+      .send({ message: "Internal Server Error", error: error.message });
+  }
+});
 
     // MongoDB Ping
     await client.db("admin").command({ ping: 1 });
