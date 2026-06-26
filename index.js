@@ -42,22 +42,13 @@ async function run() {
     const sessionCollection = database.collection("session");
 
     // 👥 [GET] Fetch All Users (🔐 Secure & Clean)
-    app.get("/users", async (req, res) => {
-      try {
-        // পাসওয়ার্ড এবং ইন্টারনাল মঙ্গোডিবি ভার্সন বাদ দিয়ে ক্লিন ডাটা রিট্রিভ করা হচ্ছে
-        const result = await userCollection
-          .find()
-          .project({ password: 0, __v: 0 })
-          .toArray();
-        res.status(200).send(result);
-      } catch (error) {
-        console.error("Error in GET /users:", error);
-        res.status(500).send({ message: "Server error occurred" });
-      }
-    });
+    
     const verifyToken = async (req, res, next) => {
       console.log("headers", req.headers.authorization);
       const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).send({ message: "Unauthorized: No token provided" });
+    }
       const token = authHeader.split(" ")[1];
       console.log(token);
       if (!token) return res.status(401).send({ message: "Unauthorized" });
@@ -78,19 +69,39 @@ async function run() {
     };
     const verifyUser = async (req, res, next) => {
       if (req.user?.role !== "user") {
-        return (res, status(403).send({ message: "Forbidden" }));
+        return res.status(403).send({ message: "Forbidden" });
       }
       next();
     };
     const verifyAdmin = async (req, res, next) => {
       if (req.user?.role !== "admin") {
-        return (res, status(403).send({ message: "Forbidden" }));
+       return res.status(403).send({ message: "Forbidden" });
       }
       next();
     };
+    const verifyAll = async(req, res, next)=>{
+      const user = req?.user
+      if(!user){
+        return
+      }
+      next()
+    }
+    app.get("/users",verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        // পাসওয়ার্ড এবং ইন্টারনাল মঙ্গোডিবি ভার্সন বাদ দিয়ে ক্লিন ডাটা রিট্রিভ করা হচ্ছে
+        const result = await userCollection
+          .find()
+          .project({ password: 0, __v: 0 })
+          .toArray();
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error in GET /users:", error);
+        res.status(500).send({ message: "Server error occurred" });
+      }
+    });
 
     // 📝 [POST] Create a Lesson
-    app.post("/lessons", async (req, res) => {
+    app.post("/lessons", verifyToken, verifyUser, async (req, res) => {
       try {
         const lessons = req.body;
         const result = await lessonsCollection.insertOne(lessons);
@@ -98,6 +109,114 @@ async function run() {
       } catch (error) {
         console.error("Error inserting lesson:", error);
         res.status(500).send({ message: "Internal Server Error" });
+      }
+    });
+    // ১. Top Contributors (গত ৭ দিনে যারা সবচেয়ে বেশি লেসন তৈরি করেছেন)
+    app.get("/users/top-contributors", async (req, res) => {
+      try {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        const topContributors = await lessonsCollection
+          .aggregate([
+            {
+              // গত ৭ দিনের লেসন ফিল্টার করা হলো
+              $match: {
+                date: { $gte: sevenDaysAgo.toISOString() },
+              },
+            },
+            {
+              // ইউজারের নাম ও ইমেজ অনুযায়ী গ্রুপ করা হলো
+              $group: {
+                _id: "$userId",
+                name: { $first: "$name" },
+                userImage: { $first: "$userImage" },
+                lessonCount: { $sum: 1 },
+              },
+            },
+            {
+              // সবচেয়ে বেশি লেসন ক্রিয়েটরদের উপরে রাখা হলো
+              $sort: { lessonCount: -1 },
+            },
+            {
+              $limit: 5, // টপ ৫ জন কন্ট্রিবিউটর দেখাবে
+            },
+          ])
+          .toArray();
+
+        res.json({ success: true, data: topContributors });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // ২. Most Saved Lessons (সবচেয়ে বেশি favorites/saves পাওয়া লেসন)
+    app.get("/lessons/most-saved", async (req, res) => {
+      try {
+        const mostSaved = await savesCollection
+          .find({})
+          .sort({ favorites: -1 }) // favorites কাউন্ট অনুযায়ী বড় থেকে ছোট সাজানো
+          .limit(4) // টপ ৪টি লেসন দেখাবে
+          .toArray();
+
+        res.json({ success: true, data: mostSaved });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+    app.get("/lessons/monthly-count",verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const monthlyData = await lessonsCollection
+          .aggregate([
+            {
+              $match: {
+                date: { $exists: true, $type: "string", $ne: "" },
+              },
+            },
+            {
+              $project: {
+                convertedDate: { $toDate: "$date" },
+              },
+            },
+            {
+              $group: {
+                _id: {
+                  year: { $year: "$convertedDate" },
+                  month: { $month: "$convertedDate" },
+                },
+                count: { $sum: 1 },
+              },
+            },
+            {
+              $sort: { "_id.year": 1, "_id.month": 1 },
+            },
+          ])
+          .toArray();
+
+        const monthNames = [
+          "Jan",
+          "Feb",
+          "Mar",
+          "Apr",
+          "May",
+          "Jun",
+          "Jul",
+          "Aug",
+          "Sep",
+          "Oct",
+          "Nov",
+          "Dec",
+        ];
+
+        const formattedData = monthlyData.map((item) => ({
+          month: `${monthNames[item._id.month - 1]} ${item._id.year}`,
+          count: item.count,
+        }));
+
+        res.json({ success: true, data: formattedData });
+      } catch (error) {
+        console.error("Error in monthly aggregation:", error);
+        res.status(500).json({ success: false, message: error.message });
       }
     });
     app.delete("/lessons/delete/:lessonId", async (req, res) => {
@@ -152,9 +271,9 @@ async function run() {
     });
     app.patch(
       "/user/update-plan/:userId",
-      verifyAdmin,
-      verifyUser,
       verifyToken,
+      verifyUser,
+      
       async (req, res) => {
         try {
           // ⚡ ভুল সংশোধন: req.body নয়, আইডি আসবে req.params থেকে
@@ -190,7 +309,7 @@ async function run() {
         }
       },
     );
-    app.patch("/lesson/feature/:lessonId", async (req, res) => {
+    app.patch("/lesson/feature/:lessonId",verifyToken, verifyAdmin, async (req, res) => {
       try {
         const lessonId = req.params.lessonId;
 
@@ -273,7 +392,7 @@ async function run() {
     });
 
     // 📂 [GET] Saved Posts by User ID
-    app.get("/savePosts/:userId", async (req, res) => {
+    app.get("/savePosts/:userId", verifyToken,verifyUser, async (req, res) => {
       try {
         const userId = req.params.userId;
         const query = { userId: userId };
@@ -286,7 +405,7 @@ async function run() {
     });
 
     // 🎯 [GET] Lessons by User ID
-    app.get("/lessons/user/:userId", async (req, res) => {
+    app.get("/lessons/user/:userId", verifyToken,verifyAdmin, async (req, res) => {
       try {
         const userId = req.params.userId;
         if (!userId || userId === "undefined") {
@@ -351,7 +470,7 @@ async function run() {
     });
 
     // ✏️ [PATCH] Update Single Lesson
-    app.patch("/lessons/:id", async (req, res) => {
+    app.patch("/lessons/:id",verifyToken, verifyUser, async (req, res) => {
       try {
         const { id } = req.params;
         const updatedData = req.body;
@@ -369,7 +488,7 @@ async function run() {
     });
 
     // 🔄 [GET] Specific Lesson Target for Update
-    app.get("/lesson-update/:id", async (req, res) => {
+    app.get("/lesson-update/:id",verifyToken, verifyUser,  async (req, res) => {
       try {
         const { id } = req.params;
         const query = { _id: new ObjectId(id) };
@@ -395,7 +514,7 @@ async function run() {
         res.status(500).send({ message: "Server error occurred" });
       }
     });
-    app.post("/lessons/report", async (req, res) => {
+    app.post("/lessons/report",verifyToken, verifyAll, async (req, res) => {
       try {
         const reportedData = req.body;
 
@@ -426,7 +545,7 @@ async function run() {
         res.status(500).json({ success: false, message: error.message }); // ← send actual error message
       }
     });
-    app.get("/lessons/report/get", async (req, res) => {
+    app.get("/lessons/report/get",verifyToken, verifyAdmin, async (req, res) => {
       try {
         const reports = req.body;
         const result = await reportsCollection.find(reports).toArray();
@@ -437,7 +556,7 @@ async function run() {
       }
     });
 
-    app.delete("/lessons/delete/report/:reportedId", async (req, res) => {
+    app.delete("/lessons/delete/report/:reportedId",verifyToken, verifyAdmin, async (req, res) => {
       try {
         const reportedId = req.params.reportedId;
         console.log(reportedId);
@@ -477,17 +596,44 @@ async function run() {
         });
       }
     });
-   app.get("/lessons/reports/count", async (req, res) => {
-  try {
-    const result = await reportsCollection.countDocuments();
-    // ⚡ ফিক্স: রেসপন্সটিকে একটি অবজেক্ট আকারে পাঠানো হলো
-    res.json({ success: true, count: result });
-  } catch (error) {
-    res
-      .status(500)
-      .send({ message: "Internal Server Error", error: error.message });
-  }
-});
+    app.get("/lessons/reports/count",verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const result = await reportsCollection.countDocuments();
+        // ⚡ ফিক্স: রেসপন্সটিকে একটি অবজেক্ট আকারে পাঠানো হলো
+        res.json({ success: true, count: result });
+      } catch (error) {
+        res
+          .status(500)
+          .send({ message: "Internal Server Error", error: error.message });
+      }
+    });
+
+    app.get("/lessons/today/count",verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        // 📅 আজকের তারিখটিকে YYYY-MM-DD ফরম্যাটে নিয়ে আসা (যেমন: "2026-06-26")
+        const todayStr = new Date().toISOString().split("T")[0];
+        console.log("Searching for date prefix:", todayStr); // টার্মিনালে চেক করার জন্য
+
+        // 🔍 কুয়েরি: 'date' ফিল্ডের লেখাটি যদি আজকের তারিখ (YYYY-MM-DD) দিয়ে শুরু হয়
+        const query = {
+          date: { $regex: `^${todayStr}` },
+        };
+
+        const count = await lessonsCollection.countDocuments(query);
+
+        res.json({
+          success: true,
+          count: count,
+        });
+      } catch (error) {
+        console.error("Error fetching today's lesson count:", error);
+        res.status(500).json({
+          success: false,
+          message: "Internal Server Error",
+          error: error.message,
+        });
+      }
+    });
 
     // MongoDB Ping
     await client.db("admin").command({ ping: 1 });
