@@ -507,7 +507,19 @@ async function run() {
     // 📄 [GET] All Lessons
     app.get("/lessons", async (req, res) => {
       try {
-        const result = await lessonsCollection.find().toArray();
+       
+       const query = {}
+        if(req.query.search){
+            query.$or = [
+              { title: { $regex: req.query.search, $options: 'i' } },
+              { tone: { $regex: req.query.search, $options: 'i' } }
+            ]
+        }
+       
+        if(req.query.category){
+          query.category = req.query.category
+        }
+        const result = await lessonsCollection.find(query).toArray();
         res.send(result);
       } catch (error) {
         console.error(error);
